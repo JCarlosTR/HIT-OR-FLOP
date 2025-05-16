@@ -1,0 +1,194 @@
+---
+title: "Association rules"
+output: html_document
+date: "2025-03-14"
+---
+
+# Load and transform data
+This chunk loads the dataset from a CSV file into the data object. The dataset is assumed to contain categorical variables relevant to song characteristics and their popularity. Loading the data is the first step before any transformation or analysis can be performed.
+```{r}
+data = read.csv('data_category.csv')
+```
+
+The dataset is then filtered to retain only the variables relevant to music characteristics and popularity. These selected variables are transformed into a transaction format, which is required by the apriori algorithm. This transformation allows the data to be processed as a set of categorical items rather than continuous numerical values.
+```{r}
+library(arules)
+library(arulesViz)
+data_select = data[,colnames(data) %in% c("popularity", "acousticness", "danceability", "energy", "explicit","instrumentalness","liveness","loudness","speechiness","tempo","valence","featuring","duration","key")]
+data_trans <- as(data_select, "transactions")
+```
+
+## Association rules to POPULARITY=HIT
+The apriori algorithm is applied to discover association rules that predict whether a song will be a HIT (popularity=HIT).
+
+- A very low support threshold (0.001) is set because there are very few hit songs in the dataset. Without this low support value, the model might fail to generate rules due to the rarity of hit songs.
+
+- A low confidence threshold (0.0001) is used because songs can become popular due to external factors (e.g., marketing, artist fame) rather than just their intrinsic characteristics. A higher confidence value would likely filter out most of the possible rules, preventing meaningful insights.
+
+- The minlen=4 parameter ensures that each rule contains at least four elements (both in the antecedent and consequent), which helps to capture more meaningful patterns.
+
+- The appearance argument forces the algorithm to include popularity=HIT in the right-hand side (RHS) of the rules, ensuring that all rules specifically predict hit songs.
+```{r}
+rules <- apriori(data_trans,
+                 parameter = list(support = 0.001, confidence = 0.0001,minlen=4),
+                 appearance = list(rhs = "popularity=HIT"))
+```
+
+This chunk processes the generated rules to retain only the most meaningful ones:
+
+- Sorting by confidence (descending order) ensures that the most reliable rules appear first.
+
+- Removing redundant rules eliminates those that provide no additional information compared to stronger existing rules. This improves interpretability by focusing only on unique, meaningful patterns.
+
+- Displaying the top 10 rules allows for an initial qualitative assessment of the best patterns found in the dataset.
+```{r}
+rules_sorted <- sort(rules, by = "confidence", decreasing = TRUE)
+rules_non_redundant1 <- rules_sorted[!is.redundant(rules_sorted)]
+inspect(rules_non_redundant1[1:10])
+```
+
+```{r}
+plot(rules_non_redundant1[1:2], method = "graph", engine = "htmlwidget")
+```
+
+The first two rules indicate that certain musical characteristics may be weakly associated with a song becoming a hit. In the first rule, songs with low acousticness, high danceability, high energy, low instrumentalness, low liveness, and mid-range duration are slightly more likely to be classified as hits. However, the confidence value is extremely low (0.62%), meaning that even when these conditions are met, the probability of success remains minimal. The support value (0.00117) confirms that very few songs in the dataset exhibit this combination of attributes. The lift of 2.83 suggests that while these features slightly increase the likelihood of a song being a hit compared to a random selection, the effect is not strong enough to be considered a reliable predictor. The second rule is nearly identical but replaces low liveness with low speechiness. The support (0.00120) and confidence (0.61%) remain similarly low, reinforcing the idea that these characteristics alone do not strongly determine a song’s popularity. Although both rules suggest that high danceability and energy, along with low acoustic and instrumental elements, might contribute to success, the extremely low confidence values indicate that other external factors—such as artist reputation, marketing strategies, and social influence—likely play a far greater role in determining whether a song becomes a hit.
+
+### Conclusion
+The results suggest that predicting a song’s success solely based on intrinsic musical features is highly challenging. The observed rules highlight weak associations between certain audio properties and popularity, but the low confidence values indicate that no specific combination of features guarantees a hit. This reinforces the idea that a song's success is influenced by many non-musical elements, including promotional efforts, audience trends, and cultural impact. Finding the ideal formula for a hit song remains elusive, as popularity is shaped by complex, often unpredictable factors beyond the song’s intrinsic characteristics.
+
+## Association rules to POPULARITY=MID-HIT
+To further explore the relationship between intrinsic song characteristics and popularity, the next step is to analyze whether studying association rules for songs classified as MID HIT yields stronger and more reliable patterns. Since HIT songs are rare and difficult to predict, shifting the focus to MID HIT tracks—songs that have achieved moderate success—may reveal more consistent trends in musical features. These songs likely share some elements with both HIT and non-HIT songs, making them a potentially more stable category for pattern discovery. By applying the same association rule mining approach but adjusting the right-hand side (RHS) to predict popularity=MID HIT, it will be possible to determine whether certain combinations of danceability, energy, acousticness, and other attributes provide clearer insights into what makes a song moderately successful. If stronger rules emerge, this could suggest that MID HIT songs are more influenced by musical properties than full HITs, reinforcing the idea that true mainstream success often depends on external factors beyond the composition itself.
+
+To build upon the previous analysis, the next step involves examining whether MID-HIT songs exhibit stronger and more predictable patterns in their musical characteristics. Since MID-HIT songs are more common than full HITs, it is possible to use a higher support threshold (0.01) without significantly limiting the number of extracted rules. Additionally, a higher confidence threshold (0.5) can be applied, as the increased frequency of MID-HIT songs allows for more reliable associations. The following chunk executes the apriori algorithm with these adjusted parameters, ensuring that the right-hand side (RHS) exclusively predicts popularity=MID-HIT while maintaining a minimum rule length of four. As a result, 334 rules were generated, suggesting that MID-HIT songs may follow more consistent patterns compared to full HITs.
+```{r}
+rules <- apriori(data_trans,
+                 parameter = list(support = 0.01, confidence = 0.5,minlen=4),
+                 appearance = list(rhs = "popularity=MID-HIT"))
+```
+
+In this chunk, the association rules for MID-HIT songs are sorted by confidence in descending order, ensuring that the most reliable and predictable patterns are examined first. By removing redundant rules, the analysis focuses on unique associations, reducing the complexity of the results and improving interpretability. Displaying the top 10 rules allows for an initial assessment of the most significant combinations of musical features that are strongly associated with a song’s moderate popularity. With higher support and confidence thresholds set earlier, it is now easier to identify more robust relationships compared to the previous analysis of HIT songs. The increased confidence reflects the greater frequency of MID-HIT songs in the dataset, providing a stronger foundation for drawing conclusions about the patterns that drive moderate success.
+```{r}
+rules_sorted <- sort(rules, by = "confidence", decreasing = TRUE)
+rules_non_redundant2 <- rules_sorted[!is.redundant(rules_sorted)]
+inspect(rules_non_redundant2[1:10])
+```
+```{r}
+plot(rules_non_redundant2[1:2], method = "graph", engine = "htmlwidget")
+```
+
+The first rule suggests that songs with high danceability, explicit content, low instrumentalness, low liveness, low speechiness, and mid-duration are highly likely to be classified as MID-HIT songs. The confidence of 57.56% indicates a relatively strong association, meaning that more than half of the songs with these characteristics are classified as MID-HITs. The support (0.01528) reflects that 1.53% of the songs in the dataset follow this combination of attributes. The lift (3.51) is high, suggesting that this combination significantly increases the likelihood of a song being a MID-HIT compared to a random song. 
+
+The second rule indicates that songs with high danceability, high energy, explicit content, low instrumentalness, low liveness, and mid-duration are also strongly associated with being MID-HIT songs. The confidence of 57.00% is similar to the first rule, confirming a strong relationship between these characteristics and moderate success. The support (0.01270) means that 1.27% of all songs exhibit this combination, while the lift (3.48) suggests a strong, positive correlation between this combination and MID-HIT popularity, even though other factors also play a role.
+
+### Conclusion
+With the higher support and confidence thresholds, the analysis of MID-HIT songs reveals stronger and more reliable patterns than in the previous analysis of HIT songs. The confidence values for the first two rules are much higher (around 57%), indicating a more reliable association between the musical characteristics and moderate popularity. The increased confidence makes it easier to conclude that certain combinations of features can significantly influence a song's likelihood of becoming a MID-HIT. While still not guaranteeing success, these patterns are much more predictable than those for full HIT songs, suggesting that moderate success may be more strongly driven by certain intrinsic characteristics.
+
+## Association rules to POPULARITY=MID
+To continue the analysis, the focus shifts to identifying the characteristics that lead a song to be classified as MID (distinct from MID-HIT). While MID songs may not be of primary interest to artists, understanding these patterns can help them avoid certain combinations that contribute to moderate, uninspiring performance.
+```{r}
+rules <- apriori(data_trans,
+                 parameter = list(support = 0.01, confidence = 0.6,minlen=4),
+                 appearance = list(rhs = "popularity=MID"))
+```
+
+This code orders the rules by confidence, to explore easier the patterns.
+```{r}
+rules_sorted <- sort(rules, by = "confidence", decreasing = TRUE)
+rules_non_redundant3 <- rules_sorted[!is.redundant(rules_sorted)]
+inspect(rules_non_redundant3[1:10])
+```
+```{r}
+plot(rules_non_redundant3[1:2], method = "graph", engine = "htmlwidget")
+```
+
+The two first association rules highlight specific intrinsic characteristics that are strongly linked to a song achieving MID popularity. Both rules share nearly identical feature sets, with only a minor difference in their support values. The primary attributes associated with MID songs in these rules include low acousticness, high danceability, absence of explicit lyrics, low instrumentalness, low liveness, low speechiness, high valence, and a large duration. These traits suggest that songs with an upbeat, energetic, and emotionally positive feel, yet lacking acoustic elements and live performance qualities, are more likely to fall into the MID category.
+
+The confidence values for both rules are approximately 65.7%, indicating a relatively strong likelihood that songs possessing these characteristics will achieve only moderate popularity. This suggests that while these traits might contribute to a song’s listenability, they do not necessarily drive it toward higher levels of success. The lift values, around 1.67, indicate a moderate positive association between these musical features and MID classification, meaning that songs with these attributes are more likely than random chance to be categorized as MID.
+
+A key takeaway from these rules is the potential impact of certain stylistic choices on a song's commercial performance. While high danceability and positive emotional tone might seem appealing, their combination with low acousticness, low liveness, and a lack of instrumental complexity may result in a track that struggles to break beyond moderate popularity. Additionally, the consistency between the two rules suggests that duration plays only a minor role in altering this pattern. Artists and producers aiming for greater success might need to consider how introducing more distinctive or dynamic elements could elevate a song beyond the MID tier.
+
+## Association rules to POPULARITY=FLOP
+Finally, analyzing rules where popularity = FLOP appears on the right-hand side provides valuable insight into the intrinsic characteristics that contribute to a song's failure to gain traction. Identifying these patterns can help artists and producers understand which combinations of musical features are more likely to result in low popularity, allowing them to make more informed creative decisions. Unlike HIT or even MID songs, FLOP tracks may share distinct traits that limit their appeal, whether due to structural, stylistic, or production-related factors. By recognizing these tendencies, musicians can better avoid elements that may hinder a song’s success.
+
+In this case, the confidence of the rules can be increased to 0.9, as it becomes easier to confidently predict when a song will be a FLOP. The high confidence value indicates a strong correlation between the identified characteristics and the likelihood of a song's failure to gain popularity. However, the support should remain at 0.01, as it is still challenging to find a significant number of songs with identical combinations of these features. Despite the higher confidence, the rarity of these specific combinations in the dataset means that the support will naturally be lower, reflecting the difficulty in pinpointing songs with such precise characteristics.
+```{r}
+rules <- apriori(data_trans,
+                 parameter = list(support = 0.01, confidence = 0.9,minlen=6),
+                 appearance = list(rhs = "popularity=FLOP"))
+```
+
+To apply the apriori algorithm with the defined parameters, 1246 rules have been obtained. These rules are going to be ordered with the next code chart.
+```{r}
+rules_sorted <- sort(rules, by = "confidence", decreasing = TRUE)
+rules_non_redundant4 <- rules_sorted[!is.redundant(rules_sorted)]
+inspect(rules_non_redundant4[1:10])
+```
+```{r}
+plot(rules_non_redundant4[1:2], method = "graph", engine = "htmlwidget")
+```
+
+The two first rules reveal strong patterns indicating that certain characteristics are strongly linked to a song's likelihood of being a FLOP. Both rules share key attributes such as low acousticness, low energy, high speechiness, and a short duration, suggesting that songs with these traits tend to fail in terms of popularity.
+
+The confidence value of 0.997 in both rules is exceptionally high, indicating a very reliable association between these feature combinations and a song's poor performance. In other words, when a song possesses these specific traits, it is almost certain to be classified as a FLOP. This strong confidence suggests that these characteristics are major contributors to a song’s lack of success, making them highly predictive of failure.
+
+The support is 0.01, which reflects the rarity of songs with these precise combinations of characteristics, highlighting the challenge of finding many tracks with these exact features. Despite the low support, the lift value of 2.27 indicates that these characteristics are more likely to appear together in FLOP songs than by chance, further reinforcing the idea that these particular features are strongly associated with low popularity.
+
+Overall, these rules suggest that songs with low acousticness, low energy, high speechiness, and short durations are highly likely to underperform. Artists and producers should avoid these combinations if they aim for higher popularity, as they seem to significantly contribute to a song's failure to gain traction in the market.
+
+## Final conclusions
+Analyzing all the rules by popularity, reveals some key patterns that differentiate songs classified as HIT, MID-HIT, MID and FLOP, as well as factors that contribute to a song's commercial success or failure.
+
+  -Danceability and Energy: Danceability is a consistent factor in both MID-HIT and FLOP songs, with high danceability often correlating to moderate success. However, the level of energy plays a critical role in distinguishing between a song that could be a HIT or a FLOP. MID-HIT songs typically have high danceability and moderate energy, whereas FLOP songs with high speechiness and low energy seem less engaging, which likely contributes to their failure.
+
+  -Explicit Content: Explicit lyrics seem to play a role in boosting the likelihood of achieving MID-HIT status. The first two rules, which both predict MID-HIT popularity, involve explicit lyrics alongside other factors such as low instrumentalness and low liveness. This suggests that while explicit content is often associated with higher success, it’s the combination of features that ultimately drives the track's popularity.
+
+  -Acousticness and Valence: For MID songs, low acousticness and high valence are significant characteristics. This combination suggests that emotionally positive, but not overly acoustic, tracks are more likely to fall into the MID category. Songs that are not highly acoustic but maintain a high-energy, positive tone (like high valence) seem to be more commercially successful at a moderate level.
+
+  -Speechiness and Instrumentalness: Speechiness, when high, appears to be a strong indicator of failure, as seen in the FLOP rule. High speechiness combined with low energy, low acousticness, and short duration greatly increases the likelihood of a song becoming a FLOP. In contrast, songs with lower speechiness and lower instrumental complexity tend to have higher success rates, especially when paired with traits like high danceability and explicit lyrics.
+
+In conclusion, the key factors differentiating a HIT, MID-HIT, MID or FLOP song involve combinations of danceability, explicit content, energy levels, acousticness, and speechiness. MID-HIT songs are characterized by a balance of danceability, moderate energy, and often explicit lyrics, while FLOP songs struggle due to factors like high speechiness and low energy. MID songs, on the other hand, are more likely to have low acousticness and high valence. These patterns suggest that successful songs tend to strike a balance between energy, emotional tone, and accessibility while avoiding combinations that could hinder commercial appeal.
+
+```{r}
+# Cargar librerías
+library(arules)
+library(arulesViz)
+library(igraph)
+
+# 1. Seleccionar la primera regla de cada grupo
+r1 <- rules_non_redundant1[1]  # HIT
+r2 <- rules_non_redundant2[1]  # MID-HIT
+r3 <- rules_non_redundant3[1]  # MID
+r4 <- rules_non_redundant4[1]  # FLOP
+
+# 2. Combinar en un solo conjunto de reglas
+rules_combined <- c(r1, r2, r3, r4)
+
+# 3. Crear el grafo (usa engine="igraph" para obtener objeto igraph)
+# Generar el grafo como objeto igraph
+ig <- plot(rules_combined, method = "graph", engine = "igraph")
+
+# Verificar el atributo 'type' que indica si es regla (TRUE) o ítem (FALSE)
+is_rule_node <- V(ig)$type  # TRUE para reglas
+
+# Asignar color por defecto
+V(ig)$color <- "lightgrey"
+
+# Asignar colores por grupo a los nodos de reglas
+# Asumiendo el orden: HIT, MID-HIT, MID, FLOP
+V(ig)$color[is_rule_node] <- c("green", "orange", "blue", "red")
+
+# Etiquetas legibles para las reglas
+V(ig)$label[is_rule_node] <- c("HIT", "MID-HIT", "MID", "FLOP")
+
+# Dibujar el grafo con colores aplicados correctamente
+plot(ig,
+     layout = layout_with_fr,
+     vertex.label.cex = 0.9,
+     vertex.size = 30,
+     main = "Reglas de Asociación por Popularidad (Coloreadas)")
+
+
+```
+
+
+
